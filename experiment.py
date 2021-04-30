@@ -10,75 +10,157 @@ import numpy as np
 
 
 class Experiment(object):
-    """[summary]
+    """A generic class capable of handling data collected by homemade LabVIEW program.
 
     Parameters
     ----------
-    object : [type]
-        [description]
+    path : str
+        path to the experiment data file
+    scan_init_file : str, optional
+        file name of scan initial settings, by default 'InitValues.csv'
+    scan_setup_file : str, optional
+        file name of scan setup, by default 'ScanLists.csv'
+    scan_value_file : str, optional
+        file name of scan values, by default 'ScanValues.csv'
+    exp_setting_file : str, optional
+        file name of experiment settings, by default 'SettingsV3.xml'
+
     """
     def __init__(self, path,
                  scan_init_file='InitValues.csv',
                  scan_setup_file='ScanLists.csv',
                  scan_value_file='ScanValues.csv',
                  exp_setting_file='SettingsV3.xml'):
-        """[summary]
 
-        Parameters
-        ----------
-        path : str
-            path to the experiment data file
-        scan_init_file : str, optional
-            file name of scan initial settings, by default 'InitValues.csv'
-        scan_setup_file : str, optional
-            file name of scan setup, by default 'ScanLists.csv'
-        scan_value_file : str, optional
-            file name of scan values, by default 'ScanValues.csv'
-        exp_setting_file : str, optional
-            file name of experiment settings, by default 'SettingsV3.xml'
-        """
         self.__path = Path(path)
+
+        #Create a folder to hold supporting files.
         if not self.__path.joinpath('assets').exists():
             self.__path.joinpath('assets').mkdir(parents=True, exist_ok=False)
+
+        #Assemble the experiment setting file.
         self._setting_assembly(scan_init_file, scan_setup_file,
                                scan_value_file, exp_setting_file)
-
+        
+        #Read in experiment data.
         self.__r = self._get_data()
 
     @property
     def path(self):
+        """Returns the path to the data file.
+
+        Returns
+        -------
+        pathlib.Path
+            a pathlib Path object that points to the data files
+
+        """
         return self.__path
 
     @property
     def scan_init(self):
+        """Returns the scan initial settings of the experiment.
+
+        Returns
+        -------
+        pandas.Dataframe
+            a Pandas Dataframe object that mimics the 'Object Init' part in LabVIEW program
+
+        """
         return self.__scan_init
 
     @property
     def scan_setup(self):
+        """Returns the scan settings of the experiment.
+
+        Returns
+        -------
+        pandas.Dataframe
+            a Pandas Dataframe object that mimics the 'Object Scan' part in LabVIEW program
+
+        """
         return self.__scan_setup
 
     @property
     def scan_value(self):
+        """Returns the multidimensional scan values of the experiment.
+
+        Returns
+        -------
+        list
+            a list of numpy.ndarray objects, each array corresponds to a scan axis calculated scan step values and initial values
+
+        """
         return self.__scan_value
 
     @property
     def scan_size(self):
+        """Returns the scan size of the experiment.
+
+        Returns
+        -------
+        numpy.ndarray
+            a 1-d array of scan sizes
+
+        """
         return self.__scan_size
 
     @property
     def number_of_readout(self):
+        """Returns the number of readout resonators.
+
+        Returns
+        -------
+        int
+            number of readout resonators, calculated from the dimension of data files
+
+        """
         return self.__number_of_readout
 
     @property
     def average_axis(self):
+        """Returns the axes along which averaging shall be carried out.
+
+        Returns
+        -------
+        tuple
+            average axis indices, obtained from scan setup where scan target is set to 'Repeat'
+
+        """
         return self.__average_axis
 
     @property
     def data(self):
+        """Returns the experiment raw data.
+
+        Returns
+        -------
+        list of list of numpy.ndarray
+            experiment raw data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup]
+
+        Examples
+        --------
+        To access I quadrature data of the first readout resonator,
+
+        >>> exp.data[0][0][...]
+
+        """
         return self.__r
 
     def average(self, average_axis=None):
+        """Average the experiment data.
 
+        Parameters
+        ----------
+        average_axis : tuple, optional
+            the axis along which to carry out averaging, if not specified all 'Repeat' axes will be averaged, by default None
+
+        Returns
+        -------
+        list of list of numpy.ndarray
+            averaged data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup excluding 'Repeat']
+    
+        """
         if average_axis is None:
             average_axis = self.__average_axis
 
