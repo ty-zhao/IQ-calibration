@@ -34,15 +34,15 @@ class Experiment(object):
 
         self.__path = Path(path)
 
-        #Create a folder to hold supporting files.
+        # Create a folder to hold supporting files.
         if not self.__path.joinpath('assets').exists():
             self.__path.joinpath('assets').mkdir(parents=True, exist_ok=False)
 
-        #Assemble the experiment setting file.
+        # Assemble the experiment setting file.
         self._setting_assembly(scan_init_file, scan_setup_file,
                                scan_value_file, exp_setting_file)
         
-        #Read in experiment data.
+        # Read in experiment data.
         self.__r = self._get_data()
 
     @property
@@ -112,7 +112,7 @@ class Experiment(object):
         Returns
         -------
         int
-            number of readout resonators, calculated from the dimension of data files
+            number of readout resonators, calculated from the number of heterodyne frequency found
 
         """
         return self.__number_of_readout
@@ -148,7 +148,7 @@ class Experiment(object):
         return self.__r
 
     def average(self, average_axis=None):
-        """Average the experiment data.
+        """Averages the experiment data.
 
         Parameters
         ----------
@@ -158,7 +158,7 @@ class Experiment(object):
         Returns
         -------
         list of list of numpy.ndarray
-            averaged data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup excluding 'Repeat']
+            averaged data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup excluding 'Repeat'] with default average_axis
     
         """
         if average_axis is None:
@@ -169,6 +169,19 @@ class Experiment(object):
         return averaged_data
 
     def mean_mag(self, decibel=True):
+        """Returns mean magnitude of the resonator signal. 
+
+        Parameters
+        ----------
+        decibel : bool, optional
+            decides the unit of the return, by default True
+
+        Returns
+        -------
+        list of numpy.ndarray
+            magnitude calculated from averaged data, with formula sqrt(I**2+Q**2), result should be accessed with form mean_mag[resonator index][data with shape of scan setup excluding 'Repeat']
+
+        """
         if decibel:
             mag = 20*np.log10(np.linalg.norm(self.average(), axis=1))
         else:
@@ -177,6 +190,19 @@ class Experiment(object):
         return mag
 
     def mean_phase(self, deg=False):
+        """Returns mean phase of the resonator signal. 
+
+        Parameters
+        ----------
+        deg : bool, optional
+            decides the unit of the return, by default True
+
+        Returns
+        -------
+        list of numpy.ndarray
+            phase calculated from averaged data, with formula arctan(Q/I), result should be accessed with form phase[resonator index][data with shape of scan setup excluding 'Repeat']
+
+        """        
         complex_data = [[None] for _ in range(self.__number_of_readout)]
         for res in range(self.__number_of_readout):
             complex_data[res] = self.average()[res][0] +1j*self.average()[res][1]
@@ -190,10 +216,26 @@ class Experiment(object):
 
     def _setting_assembly(self, scan_init_file, scan_setup_file,
                           scan_value_file, exp_setting_file):
+        """Method to put together the experiment setting file based on outputs of LabVIEW program.
+
+        Parameters
+        ----------
+        scan_init_file : str, optional
+            file name of scan initial settings, by default 'InitValues.csv'
+        scan_setup_file : str, optional
+            file name of scan setup, by default 'ScanLists.csv'
+        scan_value_file : str, optional
+            file name of scan values, by default 'ScanValues.csv'
+        exp_setting_file : str, optional
+            file name of experiment settings, by default 'SettingsV3.xml'
+
+        """
+        # check if the data has already been processed and there is existing setting file
         if self.__path.joinpath('assets/settings.joblib').exists():
             with open(self.__path.joinpath('assets/settings.joblib'), 'rb') as handle:
                 setting_ensemble = joblib.load(handle)
 
+            # load from existing file
             self.__scan_init = setting_ensemble['scan_init']
             self.__scan_setup = setting_ensemble['scan_setup']
             self.__scan_value = setting_ensemble['scan_value']
@@ -202,41 +244,63 @@ class Experiment(object):
             self.__average_axis = setting_ensemble['average_axis']
 
         else:
+            # read in scan initial settings
             self.__scan_init = pd.read_csv(
                 self.__path.joinpath(scan_init_file),
-                index_col=0, header=None,
-                float_precision='round_trip')
+                index_col=0,
+                header=None,
+                float_precision='round_trip'
+                )
             self.__scan_init.index.name = None
-            self.__scan_init.columns = self.__scan_init.columns - 1
-            # -1 is to fix name mismatch
+            self.__scan_init.columns = self.__scan_init.columns - 1 # hardcoded -1 is to fix name mismatch
 
+            # read in scan settings
             self.__scan_setup = pd.read_csv(
                 self.__path.joinpath(scan_setup_file),
-                index_col=None, header=None,
-                float_precision='round_trip')
-            self.__scan_setup.index = ['Enabled', 'Target', 'Parameter', 'Scan #', 'Object #',
-                                       'Start', 'Stop', '# of Step']
-            self.__disabled_object = np.nonzero(self.__scan_setup.loc[
-                'Enabled', :].str.contains('FALSE').to_numpy())[0]
-            self.__scan_setup = self.__scan_setup.drop(self.__disabled_object, axis=1)
-            self.__scan_setup.columns = range(len(self.__scan_setup.columns))
+                index_col=None,
+                header=None,
+                float_precision='round_trip'
+                )
+            self.__scan_setup.index = ['Enabled',
+                                       'Target',
+                                       'Parameter',
+                                       'Scan #',
+                                       'Object #',
+                                       'Start',
+                                       'Stop',
+                                       '# of Step']
+            self.__disabled_object = np.nonzero(
+                self.__scan_setup.loc['Enabled', :].str.contains('FALSE').to_numpy())[0] # check for scan terms which are disabled in LabVIEW setting
+            self.__scan_setup = self.__scan_setup.drop(self.__disabled_object, axis=1) # drop the disabled terms
+            self.__scan_setup.columns = range(len(self.__scan_setup.columns)) # index columns
 
+            # assume scan sizes based on the '# of step' row of scan setup Dataframe
             self.__scan_size = self.__scan_setup.iloc[[-1]].to_numpy().astype(int)[0]
 
-            self.__average_axis = tuple(np.nonzero(self.__scan_setup.loc[
-                'Target', :].str.contains('Repeat').to_numpy())[0]+2)
+            # assume average axis by searching for 'Repeat' in the 'Target' row of scan setup Dataframe
+            self.__average_axis = tuple(
+                np.nonzero(self.__scan_setup.loc['Target', :].str.contains('Repeat').to_numpy())[0]+2 # hardcorded +2 is to take care of the resonator index and quadrature index
+                )
 
+            # read in the raw scan values without initial value added
             self.__scan_value_raw = pd.read_csv(
                 self.__path.joinpath(scan_value_file),
-                index_col=None, header=None, skiprows=self.__disabled_object,
+                index_col=None,
+                header=None,
+                skiprows=self.__disabled_object,
                 float_precision='round_trip').to_numpy()
-            
+
+            # load 'SettingsV3.xml'
             tree = ET.parse(self.__path.joinpath(exp_setting_file))
             root = tree.getroot()
+
+            # Determine number of readout resonator based on number of heterodyne frequency
             for array in root.iter('{http://www.ni.com/LVData}Array'):
                 if array.find('{http://www.ni.com/LVData}Name').text == 'HeteroFreq':
                     self.__number_of_readout = int(
                         array.findall('{http://www.ni.com/LVData}Dimsize')[1].text)
+
+            # correct scan size for 'Sequencer' target in single-shot experiments
             for ew_element in root.iter('{http://www.ni.com/LVData}EW'):
                 if ew_element.find('{http://www.ni.com/LVData}Val').text == '5':
                     for u32 in root.iter('{http://www.ni.com/LVData}U32'):
@@ -244,6 +308,7 @@ class Experiment(object):
                             self.__scan_size[0] = int(u32.find('{http://www.ni.com/LVData}Val').text)
                             self.__scan_value_raw[0, :self.__scan_size[0]] = np.arange(self.__scan_size[0])
 
+            # calculate the actual scan values by adding initial value and differential scan value
             self.__scan_value = [np.zeros(dim) for dim in self.__scan_size]
             for dim in range(len(self.__scan_size)):
                 target = self.__scan_setup.loc[['Target', 'Parameter'], dim].str.cat(sep=' ')
@@ -256,6 +321,7 @@ class Experiment(object):
                 self.__scan_value[dim] = self.__scan_value_raw[dim, :self.__scan_size[dim]] + init_val
                 self.__scan_value[dim].round(decimals=6)
 
+            # put settings together
             setting_ensemble = dict(scan_init=self.__scan_init,
                                     scan_setup=self.__scan_setup,
                                     scan_value=self.__scan_value,
@@ -267,12 +333,23 @@ class Experiment(object):
                 joblib.dump(setting_ensemble, handle)
 
     def _get_data(self):
+        """Method to read in raw data.
+
+        Raises
+        ------
+        FileNotFoundError
+            if the last data file is missing, indicating a noncompleted experiment
+        FileNotFoundError
+            if the data size in the last data file is not correct, indicating a noncompleted experiment
+        """
+        # check if the data file already exists
         if self.__path.joinpath('assets/data.joblib').exists():
             self.__r = joblib.load(self.__path.joinpath('assets/data.joblib'))
 
         else:
+            # initiate data array, size of data array would be (# of readout)*(quadrature count)*(scan array)
             self.__r = [[np.zeros(self.__scan_size) for _ in range(2)] for _ in range(self.__number_of_readout)]
-            # size of data array would be (# of readout)*(quadrature count)*(scan array)
+
             if len(self.__scan_size) < 3:
                 try:
                     pd.read_csv(self.__path.joinpath(f'R{self.__number_of_readout-1}I.csv'))
