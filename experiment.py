@@ -359,11 +359,13 @@ class Experiment(object):
                 for res in range(self.__number_of_readout):
                     self.__r[res][0] = pd.read_csv(
                         self.__path.joinpath(f'R{res}I.csv'),
-                        index_col=None, float_precision='round_trip',
+                        index_col=None,
+                        float_precision='round_trip',
                         header=None).T.to_numpy()
                     self.__r[res][1] = pd.read_csv(
                         self.__path.joinpath(f'R{res}Q.csv'),
-                        index_col=None, float_precision='round_trip',
+                        index_col=None,
+                        float_precision='round_trip',
                         header=None).T.to_numpy()
             elif len(self.__scan_size) == 3:
                 try:
@@ -375,12 +377,14 @@ class Experiment(object):
                     for scan in range(self.__scan_size[-1]):
                         self.__r[res][0][:, :, scan] = pd.read_csv(
                             self.__path.joinpath(f'R{res}I_{scan}.csv'),
-                            index_col=None, float_precision='round_trip',
+                            index_col=None,
+                            float_precision='round_trip',
                             header=None).T.to_numpy()
 
                         self.__r[res][1][:, :, scan] = pd.read_csv(
                             self.__path.joinpath(f'R{res}Q_{scan}.csv'),
-                            index_col=None, float_precision='round_trip',
+                            index_col=None,
+                            float_precision='round_trip',
                             header=None).T.to_numpy()
 
             joblib.dump(self.__r, self.__path.joinpath('assets/data.joblib'))
