@@ -10,7 +10,7 @@ import numpy as np
 
 
 class Experiment(object):
-    """A generic class capable of handling data collected by homemade LabVIEW program.
+    """A generic class capable of handling data.
 
     Parameters
     ----------
@@ -26,11 +26,12 @@ class Experiment(object):
         file name of experiment settings, by default 'SettingsV3.xml'
 
     """
-    def __init__(self, path,
-                 scan_init_file='InitValues.csv',
-                 scan_setup_file='ScanLists.csv',
-                 scan_value_file='ScanValues.csv',
-                 exp_setting_file='SettingsV3.xml'):
+    def __init__(
+            self, path,
+            scan_init_file='InitValues.csv',
+            scan_setup_file='ScanLists.csv',
+            scan_value_file='ScanValues.csv',
+            exp_setting_file='SettingsV3.xml'):
 
         self.__path = Path(path)
 
@@ -64,7 +65,8 @@ class Experiment(object):
         Returns
         -------
         pandas.Dataframe
-            a Pandas Dataframe object that mimics the 'Object Init' part in LabVIEW program
+            a Pandas Dataframe object that mimics the 'Object Init' part
+            in LabVIEW program
 
         """
         return self.__scan_init
@@ -76,7 +78,8 @@ class Experiment(object):
         Returns
         -------
         pandas.Dataframe
-            a Pandas Dataframe object that mimics the 'Object Scan' part in LabVIEW program
+            a Pandas Dataframe object that mimics the 'Object Scan' part
+            in LabVIEW program
 
         """
         return self.__scan_setup
@@ -88,7 +91,8 @@ class Experiment(object):
         Returns
         -------
         list
-            a list of numpy.ndarray objects, each array corresponds to a scan axis calculated scan step values and initial values
+            a list of numpy.ndarray objects, each array corresponds to a scan
+            axis calculated scan step values and initial values
 
         """
         return self.__scan_value
@@ -112,7 +116,8 @@ class Experiment(object):
         Returns
         -------
         int
-            number of readout resonators, calculated from the number of heterodyne frequency found
+            number of readout resonators, calculated from the number of
+            heterodyne frequency found
 
         """
         return self.__number_of_readout
@@ -124,7 +129,8 @@ class Experiment(object):
         Returns
         -------
         tuple
-            average axis indices, obtained from scan setup where scan target is set to 'Repeat'
+            average axis indices, obtained from scan setup where scan
+            target is set to 'Repeat'
 
         """
         return self.__average_axis
@@ -136,7 +142,9 @@ class Experiment(object):
         Returns
         -------
         list of list of numpy.ndarray
-            experiment raw data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup]
+            experiment raw data, has a three layer structure,
+            should be accessed with form
+            data[resonator index][IQ quadrature index][shape of scan setup]
 
         Examples
         --------
@@ -153,12 +161,19 @@ class Experiment(object):
         Parameters
         ----------
         average_axis : tuple, optional
-            the axis along which to carry out averaging, if not specified all 'Repeat' axes will be averaged, by default None
+            the axis along which to carry out averaging,
+            if not specified all 'Repeat' axes will be averaged,
+            by default None
 
         Returns
         -------
         list of list of numpy.ndarray
-            averaged data, has a three layer structure, should be accessed with form data[resonator index][IQ quadrature index][data with shape of scan setup excluding 'Repeat'] with default average_axis
+            averaged data, has a three layer structure,
+            should be accessed with form
+            data[resonator #][quadrature #][scan setup excluding 'Repeat'],
+            if 'average_axis' is not specified,
+            all 'Repeat' axes will be averaged,
+            by default None
     
         """
         if average_axis is None:
@@ -179,7 +194,9 @@ class Experiment(object):
         Returns
         -------
         list of numpy.ndarray
-            magnitude calculated from averaged data, with formula sqrt(I**2+Q**2), result should be accessed with form mean_mag[resonator index][data with shape of scan setup excluding 'Repeat']
+            magnitude calculated from averaged data, sqrt(I**2+Q**2),
+            result should be accessed with form
+            mean_mag[resonator index][scan setup excluding 'Repeat']
 
         """
         if decibel:
@@ -200,7 +217,9 @@ class Experiment(object):
         Returns
         -------
         list of numpy.ndarray
-            phase calculated from averaged data, with formula arctan(Q/I), result should be accessed with form phase[resonator index][data with shape of scan setup excluding 'Repeat']
+            phase calculated from averaged data, arctan(Q/I),
+            result should be accessed with form
+            phase[resonator #][scan setup excluding 'Repeat']
 
         """        
         complex_data = [[None] for _ in range(self.__number_of_readout)]
@@ -216,7 +235,7 @@ class Experiment(object):
 
     def _setting_assembly(self, scan_init_file, scan_setup_file,
                           scan_value_file, exp_setting_file):
-        """Method to put together the experiment setting file based on outputs of LabVIEW program.
+        """Method to put together the experiment setting file.
 
         Parameters
         ----------
@@ -230,7 +249,7 @@ class Experiment(object):
             file name of experiment settings, by default 'SettingsV3.xml'
 
         """
-        # check if the data has already been processed and there is existing setting file
+        # check if the data has already been processed
         if self.__path.joinpath('assets/settings.joblib').exists():
             with open(self.__path.joinpath('assets/settings.joblib'), 'rb') as handle:
                 setting_ensemble = joblib.load(handle)
@@ -252,7 +271,8 @@ class Experiment(object):
                 float_precision='round_trip'
                 )
             self.__scan_init.index.name = None
-            self.__scan_init.columns = self.__scan_init.columns - 1 # hardcoded -1 is to fix name mismatch
+            self.__scan_init.columns = self.__scan_init.columns - 1
+            # hardcoded -1 is to fix name mismatch
 
             # read in scan settings
             self.__scan_setup = pd.read_csv(
@@ -338,16 +358,19 @@ class Experiment(object):
         Raises
         ------
         FileNotFoundError
-            if the last data file is missing, indicating a noncompleted experiment
+            if the last data file is missing,
+            indicating a noncompleted experiment
         FileNotFoundError
-            if the data size in the last data file is not correct, indicating a noncompleted experiment
+            if the data size in the last data file is not correct,
+            indicating a noncompleted experiment
         """
         # check if the data file already exists
         if self.__path.joinpath('assets/data.joblib').exists():
             self.__r = joblib.load(self.__path.joinpath('assets/data.joblib'))
 
         else:
-            # initiate data array, size of data array would be (# of readout)*(quadrature count)*(scan array)
+            # initiate data array
+            # shape: (# of readout)*(quadrature count)*(scan array)
             self.__r = [[np.zeros(self.__scan_size) for _ in range(2)] for _ in range(self.__number_of_readout)]
 
             if len(self.__scan_size) < 3:
