@@ -67,10 +67,16 @@ class QubitClassifier(object):
         # find the index of 'Sequence' sweep
         seq_idx = self._exp.scan_setup.isin(['Sequence']).any().to_numpy().nonzero()[0][0]
 
-        # determines 
+        # find the index of 'Sequencer' sweep
+        # sqcer_idx = self._exp.scan_setup.isin(['Sequencer']).any().to_numpy().nonzero()[0][0]
+
+        # determines number of sequence piece
         self._seq_piece = self._exp.scan_size[seq_idx]
 
+        # initialize concatenated data
         data = [[None for _ in range(2)] for _ in range(len(self._qubit))]
+
+        # concatenate sequence
         for res, quad in product(self._qubit, range(2)):
             data_temp = self._exp.data[res][quad].transpose((2, 0, 1))
             data[res][quad] = data_temp.reshape(-1, self._exp.scan_size[1])
@@ -78,17 +84,36 @@ class QubitClassifier(object):
         return data
     
     def _classify_boundary(self, kernel='rbf'):
+        """Carry out classification.
+
+        Parameters
+        ----------
+        kernel : {'linear', 'poly', 'rbf', 'sigmoid', 'precomputed'}, optional
+            SVM kernel used, by default 'rbf'
+
+        Returns
+        -------
+        sklearn.estimator
+            best estimator determined by sklearn.GridSearchCV
+        """
         if self._exp.path.joinpath(f'assets/Projector_Q{self._qubit}.joblib').exists():
             clf = joblib.load(self._exp.path.joinpath(f'assets/Projector_Q{self._qubit}.joblib'))
         else:
             whole_set_scaled, label = self._train_set_assembly()
 
+            # prepare search grid
             C_range = np.logspace(-1.1, 3.1, num=5, base=2)
             gamma_range = np.logspace(-4.1, 1.1, num=6, base=2)
             param_grid = dict(gamma=gamma_range, C=C_range)
+
+            # stratified shuffle for cross-validation
             cv = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=42)
 
-            grid = GridSearchCV((svm.SVC(kernel=kernel)), param_grid=param_grid, cv=cv)
+            # do SVM classification 
+            grid = GridSearchCV(
+                                (svm.SVC(kernel=kernel)),
+                                param_grid=param_grid,
+                                cv=cv)
             grid.fit(whole_set_scaled, label)
 
             clf = grid.best_estimator_
@@ -98,6 +123,15 @@ class QubitClassifier(object):
         return clf
 
     def c_matrix(self):
+        """Calculate classification confusion matrix.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n_classes, n_classes)
+            Confusion matrix whose i-th row and j-th column entry indicates
+            the number of samples with true label being i-th class and
+            predicted label being j-th class.
+        """
         clf = self._classify_boundary()
         whole_set_scaled, label = self._train_set_assembly()
 
