@@ -148,6 +148,11 @@ class SingleQubitClassifier(QubitClassifier):
     def _set_assembly(self):
         """Assemble training data set.
 
+        This method is to put together the training set for supervised
+        machine learning. If the experiment includes calibration pulses,
+        those will be used directly. Otherwise, the program will infer the
+        training set to its best by simple manipulation of the data.
+
         Returns
         -------
         whole_set : numpy.ndarray
@@ -193,8 +198,18 @@ class SingleQubitClassifier(QubitClassifier):
         return whole_set, set_length
 
     def _train_set_assembly(self):
+        """Normalize train set and make labels.
+
+        Returns
+        -------
+        whole_set_scaled : numpy.ndarray
+            normalized training set, rangeing (-2, 2)
+        label : numpy.ndarray
+            training set label, by default [0, ..., 0, 1, ..., 1]
+        """
         whole_set, set_length = self._set_assembly()
-        whole_set_scaled = minmax_scale(whole_set, feature_range=(-2, 2), axis=0)
+        whole_set_scaled = minmax_scale(whole_set,
+                                        feature_range=(-2, 2), axis=0)
 
         label = np.concatenate((np.full(set_length[0], 0, dtype=int),
                                 np.full(set_length[1], 1, dtype=int)))
@@ -202,6 +217,8 @@ class SingleQubitClassifier(QubitClassifier):
         return whole_set_scaled, label
 
     def plot_boundary(self):
+        """Plot the training set and classification boundary.
+        """
         _, set_length = self._set_assembly()
         whole_set_scaled, _ = self._train_set_assembly()
 
@@ -236,6 +253,13 @@ class SingleQubitClassifier(QubitClassifier):
         plt.show()
 
     def fidelity(self):
+        """Calculate readout fidelity based on confusion matrix.
+
+        Returns
+        -------
+        float
+            possibility of correctly predicting qubit state
+        """
         c_matrix = self.c_matrix()
         infidelity = np.trace(np.fliplr(c_matrix))
         fidelity = 1 - infidelity
@@ -256,6 +280,16 @@ class SingleQubitClassifier(QubitClassifier):
         return data_rescaled
 
     def predict(self):
+        """Predict qubit state of all input data.
+
+        Returns
+        -------
+        numpy.ndarray
+            qubit state of all experiment data based on the model
+            obtained from training set, with 0 being ground state,
+            1 being excited state 
+        """
+        # rescale all data points according to training set
         data_rescaled = self._scale_to_train_set()
         xy = np.vstack([data_rescaled[0].ravel(),
                         data_rescaled[1].ravel()]).T
