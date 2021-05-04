@@ -6,7 +6,7 @@ from sklearn import svm
 from sklearn.preprocessing import minmax_scale
 from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 from sklearn.metrics import confusion_matrix
-from .experiment import Experiment
+from experiment import Experiment
 
 class QubitClassifier(object):
     """A generic class to classify qubit state.
@@ -110,8 +110,7 @@ class QubitClassifier(object):
             cv = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=42)
 
             # do SVM classification 
-            grid = GridSearchCV(
-                                (svm.SVC(kernel=kernel)),
+            grid = GridSearchCV((svm.SVC(kernel=kernel)),
                                 param_grid=param_grid,
                                 cv=cv)
             grid.fit(whole_set_scaled, label)
@@ -137,33 +136,60 @@ class QubitClassifier(object):
 
         predicted_label = clf.predict(whole_set_scaled)
 
-        c_matrix = confusion_matrix(label, predicted_label, normalize='true').T
+        c_matrix = confusion_matrix(label,
+                                    predicted_label, normalize='true').T
 
         return c_matrix
 
 class SingleQubitClassifier(QubitClassifier):
-
     def __init__(self, exp, qubit, calib_seq=None):
         super().__init__(exp, qubit, calib_seq)
 
     def _set_assembly(self):
+        """Assemble training data set.
+
+        Returns
+        -------
+        whole_set : numpy.ndarray
+            the training set for SVM to use
+        set_length : list of int
+            the length of two training subsets
+        """
         raw = self._exp.data[self._qubit]
         mean_data = self._exp.average()[self._qubit]
-        
-        x_center = np.mean(mean_data[0])
-        poly_fit = np.polynomial.Polynomial.fit(mean_data[0], mean_data[1], 1)
-        y_center = poly_fit(x_center)
-        theta = np.pi - np.angle((mean_data[0][0]-x_center)+1j*(poly_fit(mean_data[0][0])-y_center))
-        x_rotated = np.cos(theta)*(raw[0]-x_center) - np.sin(theta)*(raw[1]-y_center)
-        ground_ratio = np.sum(x_rotated < 0, axis=1)/x_rotated.shape[1]
-        idx1 = np.argmax(ground_ratio)
-        idx2 = np.argmin(ground_ratio)
 
-        ground_state_hist = np.stack((raw[0][idx1, :], raw[1][idx1, :])).T
-        excited_state_hist = np.stack((raw[0][idx2, :], raw[1][idx2, :])).T
+        # put together a rough training set when no calibration experiments
+        # are present
+        if not self._calib_seq:
+            # find a rough center of all points
+            x_center = np.mean(mean_data[0])
+            poly_fit = np.polynomial.Polynomial.fit(mean_data[0], mean_data[1], 1)
+            y_center = poly_fit(x_center)
 
+            # rotate data on IQ plane so that span along I quadrature is maximum
+            theta = np.pi - np.angle((mean_data[0][0]-x_center)+1j*(poly_fit(mean_data[0][0])-y_center))
+            x_rotated = np.cos(theta)*(raw[0]-x_center) - np.sin(theta)*(raw[1]-y_center)
+
+            # find two experiments with roughly most and least ground state
+            ground_ratio = np.sum(x_rotated < 0, axis=1)/x_rotated.shape[1]
+            idx1 = np.argmax(ground_ratio)
+            idx2 = np.argmin(ground_ratio)
+
+            # put together two training sets
+            ground_state_hist = np.stack((raw[0][idx1, :],
+                                          raw[1][idx1, :])).T
+            excited_state_hist = np.stack((raw[0][idx2, :],
+                                           raw[1][idx2, :])).T
+        else:
+            ground_state_hist = np.stack((raw[0][self._calib_seq[0], :],
+                                          raw[1][self._calib_seq[0], :])).T
+            excited_state_hist = np.stack((raw[0][self._calib_seq[1], :],
+                                           raw[1][self._calib_seq[1], :])).T
+
+        # combine the two sets
         whole_set = np.concatenate((ground_state_hist, excited_state_hist), axis=0)
         set_length = [ground_state_hist.shape[0], excited_state_hist.shape[0]]
+
         return whole_set, set_length
 
     def _train_set_assembly(self):
