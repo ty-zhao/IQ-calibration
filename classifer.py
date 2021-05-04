@@ -21,6 +21,8 @@ class QubitClassifier(object):
         the index of the calibration pulses, in the order of
         (|00>, |01>, |10>, |11>), by default None if no
         calibration pulse is included
+    kernel : {'linear', 'poly', 'rbf', 'sigmoid', 'precomputed'}, optional
+            SVM kernel used, by default 'rbf'
 
     Raises
     ------
@@ -32,7 +34,7 @@ class QubitClassifier(object):
         the qubit to be classified has out-of-range index
         
     """
-    def __init__(self, exp, qubit, calib_seq=None):
+    def __init__(self, exp, qubit, calib_seq=None, kernel='rbf'):
         if not isinstance(exp, Experiment):
             raise TypeError('Input is not a Experiment object')
 
@@ -46,6 +48,7 @@ class QubitClassifier(object):
         self._exp = exp
         self._qubit = qubit
         self._calib_seq = calib_seq
+        self._SVM_kernel = kernel
         self._clf = self._classify_boundary()
 
     def _set_assembly(self):
@@ -83,13 +86,8 @@ class QubitClassifier(object):
 
         return data
     
-    def _classify_boundary(self, kernel='rbf'):
+    def _classify_boundary(self):
         """Carry out classification.
-
-        Parameters
-        ----------
-        kernel : {'linear', 'poly', 'rbf', 'sigmoid', 'precomputed'}, optional
-            SVM kernel used, by default 'rbf'
 
         Returns
         -------
@@ -110,7 +108,7 @@ class QubitClassifier(object):
             cv = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=42)
 
             # do SVM classification 
-            grid = GridSearchCV((svm.SVC(kernel=kernel)),
+            grid = GridSearchCV((svm.SVC(kernel=self._SVM_kernel)),
                                 param_grid=param_grid,
                                 cv=cv)
             grid.fit(whole_set_scaled, label)
