@@ -224,7 +224,7 @@ class SingleQubitClassifier(QubitClassifier):
 
         fidelity = self.fidelity()
 
-        fig, ax = plt.subplots(figsize=(9, 9))
+        fig, ax = plt.subplots(figsize=(9, 9), dpi=100)
         ax.scatter(whole_set_scaled[:set_length[0], 0],
                    whole_set_scaled[:set_length[0], 1],
                    c='r', marker='.', s=20)
