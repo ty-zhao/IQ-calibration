@@ -7,6 +7,6 @@ Specification of the instrument can be found [here](https://libaps.readthedocs.i
 ## Major steps
 - [x] Experiment data I/O
 - [x] Qubit state discrimination
-- [] 'amplitude-frequency analysis'
-- [] AWG programming
-- [] Linearity verification
+- [ ] 'amplitude-frequency analysis'
+- [ ] AWG programming
+- [ ] Linearity verification
